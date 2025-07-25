@@ -1,4 +1,3 @@
-
 import fitz  # PyMuPDF
 import os
 import json
@@ -17,7 +16,7 @@ def extract_outline_from_pdf(filepath):
         for block in blocks:
             if "lines" not in block:
                 continue
-                
+
             for line in block.get("lines", []):
                 for span in line.get("spans", []):
                     text = span["text"].strip()
@@ -39,7 +38,7 @@ def extract_outline_from_pdf(filepath):
         for block in blocks:
             if "lines" not in block:
                 continue
-                
+
             for line in block.get("lines", []):
                 for span in line.get("spans", []):
                     text = span["text"].strip()
@@ -47,7 +46,7 @@ def extract_outline_from_pdf(filepath):
                         continue
 
                     size = round(span["size"], 2)
-                    
+
                     # Only consider as heading if it meets criteria
                     if is_likely_heading(text, size, avg_font_size):
                         headings.append({
