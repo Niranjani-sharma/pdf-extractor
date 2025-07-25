@@ -2,12 +2,12 @@
 import fitz  # PyMuPDF
 import os
 import json
-from utils import classify_heading_level, clean_text, extract_title_from_outline
+from utils import classify_heading_level, clean_text, extract_title_from_outline, is_likely_heading
 
 def extract_outline_from_pdf(filepath):
     doc = fitz.open(filepath)
     headings = []
-    font_sizes = []
+    all_font_sizes = []
 
     for page_index in range(len(doc)):
         page = doc[page_index]
@@ -24,19 +24,40 @@ def extract_outline_from_pdf(filepath):
                     if not text:
                         continue
 
-                    # Skip very short texts that are likely not headings
-                    if len(text) < 2:
+                    size = round(span["size"], 2)
+                    all_font_sizes.append(size)
+
+    # Calculate average font size to help identify headings
+    avg_font_size = sum(all_font_sizes) / len(all_font_sizes) if all_font_sizes else 12
+
+    # Second pass: collect potential headings
+    for page_index in range(len(doc)):
+        page = doc[page_index]
+        page_number = page_index
+
+        blocks = page.get_text("dict")["blocks"]
+        for block in blocks:
+            if "lines" not in block:
+                continue
+                
+            for line in block.get("lines", []):
+                for span in line.get("spans", []):
+                    text = span["text"].strip()
+                    if not text:
                         continue
 
                     size = round(span["size"], 2)
-                    font_sizes.append(size)
-                    headings.append({
-                        "text": clean_text(text),
-                        "size": size,
-                        "page": page_number
-                    })
+                    
+                    # Only consider as heading if it meets criteria
+                    if is_likely_heading(text, size, avg_font_size):
+                        headings.append({
+                            "text": clean_text(text),
+                            "size": size,
+                            "page": page_number
+                        })
 
     # Map font sizes to heading levels
+    font_sizes = [h["size"] for h in headings]
     levels = classify_heading_level(font_sizes)
 
     outline = []
@@ -69,7 +90,7 @@ if __name__ == "__main__":
 
             output_filename = filename.replace(".pdf", ".json")
             output_path = os.path.join(output_dir, output_filename)
-            with open(output_path, "w") as f:
-                json.dump(result, f, indent=2)
+            with open(output_path, "w", encoding='utf-8') as f:
+                json.dump(result, f, indent=2, ensure_ascii=False)
 
     print("✅ All PDFs processed.")
