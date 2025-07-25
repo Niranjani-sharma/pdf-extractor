@@ -1,7 +1,8 @@
+
 import fitz  # PyMuPDF
 import os
 import json
-from utils import classify_heading_level
+from utils import classify_heading_level, clean_text, extract_title_from_outline
 
 def extract_outline_from_pdf(filepath):
     doc = fitz.open(filepath)
@@ -10,20 +11,27 @@ def extract_outline_from_pdf(filepath):
 
     for page_index in range(len(doc)):
         page = doc[page_index]
-        page_number = page_index + 1  # To ensure pages are 1-indexed
+        page_number = page_index  # 0-indexed as expected in sample outputs
 
         blocks = page.get_text("dict")["blocks"]
         for block in blocks:
+            if "lines" not in block:
+                continue
+                
             for line in block.get("lines", []):
                 for span in line.get("spans", []):
                     text = span["text"].strip()
                     if not text:
                         continue
 
+                    # Skip very short texts that are likely not headings
+                    if len(text) < 2:
+                        continue
+
                     size = round(span["size"], 2)
                     font_sizes.append(size)
                     headings.append({
-                        "text": text,
+                        "text": clean_text(text),
                         "size": size,
                         "page": page_number
                     })
@@ -34,26 +42,21 @@ def extract_outline_from_pdf(filepath):
     outline = []
     for item in headings:
         level = levels.get(item["size"])
-        if level:
+        if level and item["text"]:  # Only add if we have a level and non-empty text
             outline.append({
                 "level": level,
                 "text": item["text"],
                 "page": item["page"]
             })
 
-    # Title is the first H1 found, or empty
-    title = next((h["text"] for h in outline if h["level"] == "H1"), "")
+    # Extract title using improved logic
+    title = extract_title_from_outline(outline)
 
     return {
         "title": title,
         "outline": outline
     }
 
-# Optional: standalone test (commented out for Docker use)
-# if __name__ == "__main__":
-#     output = extract_outline_from_pdf("sample.pdf")
-#     with open("output.json", "w") as f:
-#         json.dump(output, f, indent=2)
 if __name__ == "__main__":
     input_dir = "input"
     output_dir = "output"
