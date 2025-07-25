@@ -14,6 +14,9 @@ def clean_text(text):
     text = re.sub(r'^[-\s]+$', '', text)  # Lines with only dashes/spaces
     text = re.sub(r'^[•\-\*\+]+\s*', '', text)  # Bullet points
     
+    # Remove trailing punctuation that might be artifacts
+    text = re.sub(r'\s+$', '', text)
+    
     return text
 
 def classify_heading_level(font_sizes):
@@ -24,21 +27,24 @@ def classify_heading_level(font_sizes):
     # Get unique font sizes and sort them
     unique_sizes = sorted(set(font_sizes), reverse=True)
     
-    # Only consider sizes that appear frequently enough to be headings
+    # Count occurrences of each size
     size_counts = Counter(font_sizes)
     
     # Filter out sizes that appear too frequently (likely body text)
-    # or too rarely (likely artifacts)
+    # Keep sizes that appear 1-15 times (typical for headings)
     potential_heading_sizes = []
     for size in unique_sizes:
         count = size_counts[size]
-        # Headings typically appear 1-20 times, body text appears much more
-        if 1 <= count <= 20:
+        if 1 <= count <= 15:
             potential_heading_sizes.append(size)
     
-    # Take top 3 sizes as H1, H2, H3
+    # If we have too few potential heading sizes, relax the criteria
+    if len(potential_heading_sizes) < 2:
+        potential_heading_sizes = unique_sizes[:4]  # Take top 4 sizes
+    
+    # Map sizes to heading levels (H1, H2, H3, H4)
     level_mapping = {}
-    for i, size in enumerate(potential_heading_sizes[:3]):
+    for i, size in enumerate(potential_heading_sizes[:4]):
         level_mapping[size] = f"H{i + 1}"
     
     return level_mapping
@@ -48,21 +54,32 @@ def extract_title_from_outline(outline):
     if not outline:
         return ""
     
-    # Look for meaningful titles (not artifacts like dashes)
+    # Look for the first meaningful H1 heading, or the largest text
+    best_title = ""
+    
     for item in outline:
         text = item.get("text", "").strip()
+        level = item.get("level", "")
         
         # Skip obvious non-titles
         if not text or len(text) < 3:
             continue
         if re.match(r'^[-\s•\*\+]+$', text):
             continue
-        if text.upper() == text and len(text) < 50:  # All caps short text might be title
-            return text
-        if item.get("level") == "H1" and len(text) > 5:
-            return text
+        if text.lower() in ['table of contents', 'contents', 'index']:
+            continue
+            
+        # Prioritize H1 headings that look like titles
+        if level == "H1":
+            # If it's a reasonable length and not obviously a section header
+            if 5 <= len(text) <= 150:
+                return text
+        
+        # Keep track of the first reasonable heading if no good H1 found
+        if not best_title and len(text) >= 5:
+            best_title = text
     
-    return ""
+    return best_title
 
 def is_likely_heading(text, font_size, avg_font_size):
     """Determine if text is likely a heading"""
@@ -78,15 +95,26 @@ def is_likely_heading(text, font_size, avg_font_size):
         return False
     if re.match(r'^[-\s•\*\+]+$', text):  # Just punctuation
         return False
-    if text in ['To', 'Y', 'ou', 'T', '!', 'Rs.']:  # Common artifacts
+    if text in ['To', 'Y', 'ou', 'T', '!', 'Rs.', 'Page', 'of']:  # Common artifacts
         return False
     
-    # Check font size (headings are typically larger)
-    if font_size <= avg_font_size:
+    # Skip very short words that are likely artifacts
+    if len(text) <= 2 and not text.isupper():
+        return False
+    
+    # Check font size (headings are typically larger than average)
+    # Use a smaller threshold to catch more headings
+    if font_size < avg_font_size * 1.1:  # Reduced from strict > to allow slight variations
         return False
     
     # Check length (headings are typically not too long)
     if len(text) > 200:
+        return False
+    
+    # Skip common non-heading patterns
+    if re.match(r'^\d+\s*$', text):  # Just page numbers
+        return False
+    if re.match(r'^[a-z]\s*$', text.lower()):  # Single lowercase letters
         return False
     
     return True
