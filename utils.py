@@ -1,3 +1,4 @@
+
 import re
 from collections import Counter
 
@@ -12,11 +13,14 @@ def clean_text(text):
     # Remove common artifacts
     text = re.sub(r'^[-\s]+$', '', text)  # Lines with only dashes/spaces
     text = re.sub(r'^[•\-\*\+]+\s*', '', text)  # Bullet points
+    
+    # Remove trailing dots and colons that might be artifacts
+    text = re.sub(r'[:\.\s]+$', '', text)
+    
+    # Remove leading/trailing punctuation
+    text = text.strip('.,;:!?-_')
 
-    # Remove trailing punctuation that might be artifacts
-    text = re.sub(r'\s+$', '', text)
-
-    return text
+    return text.strip()
 
 def classify_heading_level(font_sizes):
     """Classify font sizes into heading levels"""
@@ -30,11 +34,11 @@ def classify_heading_level(font_sizes):
     size_counts = Counter(font_sizes)
 
     # Filter out sizes that appear too frequently (likely body text)
-    # Keep sizes that appear 1-15 times (typical for headings)
+    # Keep sizes that appear 1-20 times (typical for headings)
     potential_heading_sizes = []
     for size in unique_sizes:
         count = size_counts[size]
-        if 1 <= count <= 15:
+        if 1 <= count <= 20:
             potential_heading_sizes.append(size)
 
     # If we have too few potential heading sizes, relax the criteria
@@ -47,19 +51,6 @@ def classify_heading_level(font_sizes):
         level_mapping[size] = f"H{i + 1}"
 
     return level_mapping
-# def classify_heading_level(font_sizes):
-#     """
-#     Classifies font sizes into H1, H2, H3 based on top 3 unique sizes.
-#     """
-#     sorted_sizes = sorted(set(font_sizes), reverse=True)
-#     levels = {}
-#     mapping = {0: "H1", 1: "H2", 2: "H3"}
-
-#     for idx, size in enumerate(sorted_sizes[:3]):
-#         levels[size] = mapping[idx]
-
-#     return levels
-
 
 def extract_title_from_outline(outline):
     """Extract title from outline - prioritize actual document content"""
@@ -78,22 +69,20 @@ def extract_title_from_outline(outline):
             continue
         if re.match(r'^[-\s•\*\+]+$', text):
             continue
-        if text.lower() in ['table of contents', 'contents', 'index']:
+        if text.lower() in ['table of contents', 'contents', 'index', 'page']:
             continue
 
         # Prioritize H1 headings that look like titles
         if level == "H1":
             # If it's a reasonable length and not obviously a section header
-            if 5 <= len(text) <= 150:
+            if 3 <= len(text) <= 200:
                 return text
 
         # Keep track of the first reasonable heading if no good H1 found
-        if not best_title and len(text) >= 5:
+        if not best_title and len(text) >= 3:
             best_title = text
 
     return best_title
-
-
 
 def is_likely_heading(text, size, avg_font_size):
     """
@@ -103,24 +92,27 @@ def is_likely_heading(text, size, avg_font_size):
     text = text.strip()
 
     # Must be longer than a few characters
-    if len(text) < 5:
+    if len(text) < 3:
         return False
 
     # Must not be mostly numbers or special characters
-    if len(re.findall(r"[A-Za-z]", text)) / len(text) < 0.5:
+    alpha_ratio = len(re.findall(r"[A-Za-z]", text)) / len(text) if text else 0
+    if alpha_ratio < 0.3:
         return False
 
     # Avoid lines with excessive repetition
     words = text.lower().split()
-    if len(set(words)) / len(words) < 0.5:
-        return False
+    if len(words) > 0:
+        unique_ratio = len(set(words)) / len(words)
+        if unique_ratio < 0.4:
+            return False
 
     # Filter obvious junk (repeated chars)
-    if re.search(r"(.)\1{3,}", text):  # e.g., "aaaa", "ppppp"
+    if re.search(r"(.)\1{4,}", text):  # e.g., "aaaaa", "ppppp"
         return False
 
-    # Must be reasonably capitalized or large
-    if size < avg_font_size + 1.5:
+    # Must be reasonably larger than average font
+    if size < avg_font_size + 1:
         return False
 
     return True
