@@ -1,4 +1,3 @@
-
 import fitz  # PyMuPDF
 import joblib
 import pandas as pd
