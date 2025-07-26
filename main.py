@@ -1,7 +1,7 @@
 
 #!/usr/bin/env python3
 
-from extract_outline import extract_outline_from_pdf
+from ml_classifier import MLHeadingClassifier
 import os
 import json
 
@@ -11,6 +11,9 @@ def main():
     
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
+    
+    # Initialize ML classifier
+    classifier = MLHeadingClassifier()
     
     # Process all PDF files in the input directory
     pdf_files = [f for f in os.listdir(input_dir) if f.endswith('.pdf')]
@@ -24,7 +27,7 @@ def main():
         pdf_path = os.path.join(input_dir, filename)
         
         try:
-            result = extract_outline_from_pdf(pdf_path)
+            result = classifier.extract_outline_from_pdf(pdf_path)
             
             output_filename = filename.replace(".pdf", ".json")
             output_path = os.path.join(output_dir, output_filename)
