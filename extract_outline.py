@@ -1,19 +1,14 @@
 import fitz  # PyMuPDF
 import os
 import json
-from collections import defaultdict
-from utils import (
-    classify_heading_level,
-    clean_text,
-    extract_title_from_outline,
-    is_likely_heading
-)
 from ml_classifier import MLHeadingClassifier
+
 
 def extract_outline_from_pdf(filepath):
     """Extract outline from PDF using ML classification."""
     classifier = MLHeadingClassifier()
     return classifier.extract_outline_from_pdf(filepath)
+
 
 if __name__ == "__main__":
     input_dir = "input"
